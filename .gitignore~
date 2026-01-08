@@ -1,0 +1,13 @@
+# Entornos virtuales
+venv/
+env/
+__pycache__/
+*.pyc
+
+# Archivos descargados por el script (para no llenar GitHub de binarios)
+scrcpy-bin/
+scrcpy_download.tar.gz
+
+# Logs y configuraciones del sistema
+*.log
+.DS_Store
