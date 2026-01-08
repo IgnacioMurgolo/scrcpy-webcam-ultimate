@@ -1,15 +1,19 @@
 # 📸 Scrcpy Webcam Ultimate
 
-Este proyecto transforma un dispositivo Android en una Webcam de alta definición para Linux, utilizando el motor de **scrcpy** y el driver **v4l2loopback**. 
-
-Fue diseñado originalmente para optimizar el uso de un **Xiaomi Redmi Note 5 (Whyred)**, pero es compatible con cualquier dispositivo Android moderno (especialmente Android 11+ para funciones nativas de cámara y audio).
+Este proyecto transforma un dispositivo Android en una Webcam de alta definición para Linux, utilizando el motor de **scrcpy** y el driver **v4l2loopback**.       
+Herramienta gráfica para Linux que transforma tu dispositivo Android en una Webcam profesional de alta definición para Zoom, Meet, OBS, etc.
 
 ## 🚀 Características Principales
 * **Detección de Lentes:** Escanea automáticamente el hardware del dispositivo para permitir la selección entre cámara frontal, trasera o lentes auxiliares (Macro/Gran angular).
+* **Auto-Instalable:** Descarga `scrcpy` automáticamente si no lo tenés.
 * **Conexión Híbrida:** Soporta conexión vía USB para mínima latencia y vía WiFi (ADB TCP/IP) para movilidad total.
-* **Audio Integrado:** Opción para habilitar el micrófono del celular de forma nativa (Android 11+).
 * **Ajuste Inteligente:** Control de bitrate y resolución (720p/1080p) con protección de ancho de banda para evitar artefactos visuales.
 * **Interfaz Moderna:** Desarrollada con `CustomTkinter` para una experiencia de usuario fluida en Linux.
+* **Modo Espejo:** Opción de volteo de imagen (Flip) integrada para videollamadas.
+* **Eficiencia:** Basado en el motor de **scrcpy**, garantizando el menor uso de CPU posible.
+
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
+![Platform](https://img.shields.io/badge/Linux-Mint%2FUbuntu-orange)
 
 ## 📦 Instalación y Configuración
 
