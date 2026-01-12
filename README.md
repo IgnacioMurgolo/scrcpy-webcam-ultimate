@@ -56,4 +56,7 @@ Nota: Al ejecutarlo, se crearán automáticamente los accesos directos en tu sis
 Si deseas eliminar los accesos directos creados en el Menú y el Escritorio, ejecutá:
 ```bash
 python main.py --uninstall
+
+=======
 ```
+>>>>>>> 765b412 (Agrega funcion de usar mic, correccion de errores y mejora UI. Se hace refactoreo.)

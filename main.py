@@ -1,11 +1,5 @@
 import customtkinter as ctk
-import subprocess
-import os
-import shutil
-import threading
-import re
-import urllib.request
-import tarfile
+import sys, subprocess, os, shutil, threading, re, urllib.request, tarfile, time
 from colorama import Fore, init
 
 init(autoreset=True)
@@ -13,58 +7,41 @@ init(autoreset=True)
 # --- CONFIGURACIÓN ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SCRCPY_DIR = os.path.join(BASE_DIR, "scrcpy-bin")
+SCRCPY_EXE = None
 
-# Lista de prioridad para buscar Scrcpy
 POSIBLES_RUTAS = [
-    os.path.expanduser("~/Documents/scrcpy-linux-x86_64-v3.3.4/scrcpy"),
-    os.path.join(SCRCPY_DIR, "scrcpy"),
     os.path.join(SCRCPY_DIR, "scrcpy-linux-x86_64-v3.1", "scrcpy"),
-    shutil.which("scrcpy")
+    os.path.join(SCRCPY_DIR, "scrcpy")
 ]
 
-SCRCPY_EXE = None 
-
-# --- DICCIONARIO DE IDIOMAS ---
 TEXTOS = {
     "es": {
-        "title": "Centro de Control Webcam",
-        "wifi_btn": "📶 WiFi",
-        "lens": "Lente / Cámara:",
-        "res": "Resolución:",
-        "bitrate": "Bitrate:",
-        "mirror": "Modo Espejo (Flip)",
-        "preview": "Mostrar Previsualización (PC)",
-        "start": "INICIAR STREAM",
-        "stop": "DETENER STREAM",
-        "ready": "Listo para conectar",
-        "connecting": "Conectando...",
-        "live": "🔴 EN VIVO",
-        "wifi_success": "¡Desconectá el USB ahora!",
-        "wifi_fail": "Error WiFi:",
-        "finished": "Finalizado",
-        "cam_rear": "Trasera (Principal)",
-        "cam_front": "Frontal (Selfie)",
-        "cam_aux": "Auxiliar"
+        "title": "Webcam Control", "wifi_btn": "🔗 WiFi",
+        "lens": "Cámara", "res": "Resolución", 
+        "mirror": "Modo Espejo", "audio": "Transmitir Audio",
+        "preview": "Previsualizar", "start": "INICIAR TRANSMISIÓN",
+        "stop": "DETENER", "ready": "Sistema Listo",
+        "connecting": "Conectando...", "live": "🔴 EN EL AIRE",
+        "wifi_success": "Conectado", "wifi_fail": "Error",
+        "finished": "Finalizado", 
+        "cam_rear": "Trasera (Principal)", "cam_front": "Frontal (Selfie)", "cam_aux": "Aux",
+        "mode_usb": "🔌 USB", "mode_wifi": "📡 WIFI",
+        "sect_video": "CONFIGURACIÓN DE VIDEO", "sect_opts": "OPCIONES",
+        "no_cams": "Sin cámaras detectadas"
     },
     "en": {
-        "title": "Webcam Control Center",
-        "wifi_btn": "📶 WiFi",
-        "lens": "Lens / Camera:",
-        "res": "Resolution:",
-        "bitrate": "Bitrate:",
-        "mirror": "Mirror Mode (Flip)",
-        "preview": "Show Preview Window (PC)",
-        "start": "START STREAM",
-        "stop": "STOP STREAM",
-        "ready": "Ready to connect",
-        "connecting": "Connecting...",
-        "live": "🔴 LIVE",
-        "wifi_success": "Unplug USB now!",
-        "wifi_fail": "WiFi Error:",
-        "finished": "Finished",
-        "cam_rear": "Back (Main)",
-        "cam_front": "Front (Selfie)",
-        "cam_aux": "Aux"
+        "title": "Webcam Control", "wifi_btn": "🔗 WiFi",
+        "lens": "Camera", "res": "Resolution", 
+        "mirror": "Mirror Mode", "audio": "Stream Audio",
+        "preview": "Preview", "start": "START STREAM",
+        "stop": "STOP", "ready": "System Ready",
+        "connecting": "Connecting...", "live": "🔴 LIVE ON AIR",
+        "wifi_success": "Connected", "wifi_fail": "Error",
+        "finished": "Ended", 
+        "cam_rear": "Back (Main)", "cam_front": "Front (Selfie)", "cam_aux": "Aux",
+        "mode_usb": "🔌 USB", "mode_wifi": "📡 WIFI",
+        "sect_video": "VIDEO SETTINGS", "sect_opts": "OPTIONS",
+        "no_cams": "No cameras found"
     }
 }
 
@@ -75,314 +52,284 @@ def buscar_scrcpy():
     for ruta in POSIBLES_RUTAS:
         if ruta and os.path.exists(ruta):
             if os.access(ruta, os.X_OK):
-                SCRCPY_EXE = ruta
-                return True
-            else:
-                try:
-                    os.chmod(ruta, 0o755)
-                    SCRCPY_EXE = ruta
-                    return True
-                except: pass
-    return False
-
-def check_dependencies():
-    if shutil.which("adb") is None:
-        print(f"{Fore.RED}[!] Error: No se encuentra 'adb'.")
-        return False
-    if buscar_scrcpy():
-        return True
+                SCRCPY_EXE = ruta; return True
     return False
 
 def instalador_automatico():
-    if check_dependencies(): return True
-    print(f"{Fore.YELLOW}[!] Scrcpy no encontrado. Descargando v3.1...")
+    if shutil.which("adb") is not None and buscar_scrcpy(): return True
     try:
         url = "https://github.com/Genymobile/scrcpy/releases/download/v3.1/scrcpy-linux-x86_64-v3.1.tar.gz"
         tar_path = os.path.join(BASE_DIR, "scrcpy_download.tar.gz")
         urllib.request.urlretrieve(url, tar_path)
-        with tarfile.open(tar_path, "r:gz") as tar:
-            tar.extractall(path=SCRCPY_DIR)
-        os.remove(tar_path)
-        return check_dependencies()
-    except Exception as e:
-        print(f"{Fore.RED}[✘] Error descarga: {e}")
-        return False
+        os.makedirs(SCRCPY_DIR, exist_ok=True)
+        with tarfile.open(tar_path, "r:gz") as tar: tar.extractall(path=SCRCPY_DIR)
+        os.remove(tar_path); return buscar_scrcpy()
+    except: return False
 
-# --- NUEVA FUNCIÓN: SELECTOR INTELIGENTE DE DISPOSITIVO ---
 def obtener_serial_prioritario():
-    """
-    Si hay USB y WiFi, devuelve el serial del USB.
-    Si solo hay uno, devuelve ese.
-    """
     try:
         res = subprocess.run("adb devices", shell=True, capture_output=True, text=True)
-        lines = res.stdout.strip().split('\n')[1:] # Saltamos la cabecera "List of devices..."
-        
-        usb_serial = None
-        wifi_serial = None
-        
+        lines = res.stdout.strip().split('\n')[1:]
+        usb, wifi = None, None
         for line in lines:
             if "device" in line and not "offline" in line:
-                parts = line.split()
-                if not parts: continue
-                serial = parts[0]
-                
-                # Detectamos si es IP (WiFi) o Serial (USB)
-                if "." in serial and ":" in serial: # Es una IP ej 192.168.1.35:5555
-                    wifi_serial = serial
-                else:
-                    usb_serial = serial
-        
-        # PRIORIDAD: USB > WIFI
-        if usb_serial: return usb_serial
-        if wifi_serial: return wifi_serial
-        return None
-        
+                s = line.split()[0]
+                if "." in s: wifi = s
+                else: usb = s
+        return usb if usb else wifi
     except: return None
 
-def get_device_info(serial=None):
-    cmd = "adb "
-    if serial: cmd += f"-s {serial} "
-    cmd += "shell getprop ro.product.model"
-    try:
-        res = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=2)
-        return res.stdout.strip() if res.stdout.strip() else "..."
-    except: return "Error ADB"
-
-def get_best_encoder(serial=None):
-    cmd = f"{SCRCPY_EXE} "
-    if serial: cmd += f"-s {serial} "
-    cmd += "--list-encoders"
-    try:
-        res = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=5)
-        if "OMX.qcom.video.encoder.avc" in res.stdout:
-            return "OMX.qcom.video.encoder.avc"
-        return "c2.android.avc.encoder"
-    except: return "c2.android.avc.encoder"
-
 def get_camera_ids(serial=None):
-    cmd = f"{SCRCPY_EXE} "
-    if serial: cmd += f"-s {serial} "
-    cmd += "--list-cameras"
+    cmd = f"{SCRCPY_EXE} {'-s ' + serial if serial else ''} --list-cameras"
     try:
         res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-        ids = []
-        for line in (res.stdout + res.stderr).split('\n'):
-            match = re.search(r'camera-id=(\d+)', line)
-            if match:
-                ids.append(match.group(1))
-        return sorted(list(set(ids))) if ids else ["0", "1"]
-    except: return ["0", "1"]
-
-def setup_v4l2(node=10):
-    os.system("sudo modprobe -r v4l2loopback 2>/dev/null")
-    os.system(f"sudo modprobe v4l2loopback card_label='Webcam-Pro' exclusive_caps=1 video_nr={node}")
-    return os.path.exists(f"/dev/video{node}")
+        ids = re.findall(r'camera-id=(\d+)', res.stdout + res.stderr)
+        return sorted(list(set(ids))) if ids else []
+    except: return []
 
 def conectar_inalambrico():
     try:
-        # Obtenemos IP (asumiendo que hay un USB conectado para el setup inicial)
+        subprocess.run("adb disconnect", shell=True)
+        time.sleep(1)
         res = subprocess.run("adb shell ip -f inet addr show wlan0", shell=True, capture_output=True, text=True)
         match = re.search(r'inet (\d+\.\d+\.\d+\.\d+)', res.stdout)
-        if not match: return False, "No IP (Activá WiFi)"
+        if not match:
+            res = subprocess.run("adb shell ip route", shell=True, capture_output=True, text=True)
+            match = re.search(r'src (\d+\.\d+\.\d+\.\d+)', res.stdout)
+        if not match: return False, "No IP"
         ip = match.group(1)
         subprocess.run("adb tcpip 5555", shell=True, timeout=5)
+        time.sleep(2)
         res = subprocess.run(f"adb connect {ip}:5555", shell=True, capture_output=True, text=True)
-        if "connected" in res.stdout: return True, ip
-        return False, "Error ADB"
+        if "connected" in res.stdout: return True, f"{ip}:5555"
+        return False, "Reintentar"
     except Exception as e: return False, str(e)
 
-# --- INTERFAZ GRÁFICA ---
+def setup_v4l2(node=10):
+    os.system("pkill -9 scrcpy 2>/dev/null")
+    ret = os.system(f"sudo modprobe -r v4l2loopback && sudo modprobe v4l2loopback card_label='Webcam-Pro' exclusive_caps=1 video_nr={node}")
+    if ret != 0:
+        cmd = f"modprobe -r v4l2loopback; modprobe v4l2loopback card_label='Webcam-Pro' exclusive_caps=1 video_nr={node}"
+        os.system(f"pkexec sh -c \"{cmd}\"")
+    return os.path.exists(f"/dev/video{node}")
 
+def crear_lanzador_linux():
+    if os.name != 'posix': return
+    repo_path = os.path.dirname(os.path.abspath(__file__))
+    venv_python = os.path.join(repo_path, "venv", "bin", "python3")
+    if not os.path.exists(venv_python): venv_python = "python3"
+    contenido = f"""[Desktop Entry]
+Name=Webcam Ultimate
+Exec={venv_python} {os.path.join(repo_path, "main.py")}
+Path={repo_path}
+Icon=camera-web
+Terminal=false
+Type=Application
+Categories=Video;AudioVideo;
+"""
+    p = os.path.expanduser("~/.local/share/applications/Webcam-Ultimate.desktop")
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    with open(p, "w") as f: f.write(contenido)
+    os.chmod(p, 0o755)
+
+# --- INTERFAZ ---
 class WebcamApp(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("Scrcpy Webcam Ultimate")
-        self.geometry("420x780")
+        self.title("Scrcpy Webcam")
+        self.geometry("400x720")
         ctk.set_appearance_mode("dark")
-        
         self.lang = "es"
         self.process = None
         
-        # 1. Determinamos qué dispositivo usar al inicio
         self.target_serial = obtener_serial_prioritario()
-        
-        # 2. Cargamos datos usando ese serial específico
-        self.modelo = get_device_info(self.target_serial)
-        self.encoder = get_best_encoder(self.target_serial)
         self.raw_camera_ids = get_camera_ids(self.target_serial)
-
-        # Header
-        self.top_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.top_frame.pack(fill="x", padx=10, pady=5)
-        self.lang_opt = ctk.CTkOptionMenu(self.top_frame, values=["🇪🇸 ES", "🇺🇸 EN"], width=80, command=self.cambiar_idioma)
-        self.lang_opt.pack(side="right")
         
-        self.lbl_title = ctk.CTkLabel(self, text=TEXTOS[self.lang]["title"], font=("Roboto", 22, "bold"))
-        self.lbl_title.pack(pady=(5, 15))
+        if not self.raw_camera_ids:
+             self.raw_camera_ids = ["0", "1"] 
 
-        # Status
-        self.status_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.status_frame.pack(fill="x", padx=25)
-        self.lbl_model = ctk.CTkLabel(self.status_frame, text=f"📱 {self.modelo}", text_color="#3498db", font=("Arial", 14, "bold"))
-        self.lbl_model.pack(side="left")
-        self.btn_wifi = ctk.CTkButton(self.status_frame, text=TEXTOS[self.lang]["wifi_btn"], width=80, fg_color="#8e44ad", command=self.activar_wifi)
-        self.btn_wifi.pack(side="right")
+        # HEADER
+        self.header = ctk.CTkFrame(self, fg_color="transparent")
+        self.header.pack(fill="x", padx=15, pady=(15, 5))
+        self.lbl_title = ctk.CTkLabel(self.header, text=TEXTOS[self.lang]["title"], font=("Roboto", 18, "bold"))
+        self.lbl_title.pack(side="left")
+        self.lang_opt = ctk.CTkSegmentedButton(self.header, values=["ES", "EN"], width=60, height=24, command=self.cambiar_idioma)
+        self.lang_opt.set("ES"); self.lang_opt.pack(side="right")
 
-        # Controles
-        self.lbl_lens = ctk.CTkLabel(self, text=TEXTOS[self.lang]["lens"])
-        self.lbl_lens.pack(pady=(20, 5))
+        # STATUS BADGE
+        self.status_card = ctk.CTkFrame(self, fg_color="#1f1f1f", corner_radius=8, height=40)
+        self.status_card.pack(fill="x", padx=15, pady=5)
+        self.status_card.grid_columnconfigure(1, weight=1)
+        self.lbl_conn_type = ctk.CTkLabel(self.status_card, text="...", font=("Arial", 12, "bold"))
+        self.lbl_conn_type.grid(row=0, column=0, padx=15, pady=8, sticky="w")
+        self.btn_wifi = ctk.CTkButton(self.status_card, text=TEXTOS[self.lang]["wifi_btn"], width=80, height=24, fg_color="#444444", hover_color="#555555", command=self.activar_wifi)
+        self.btn_wifi.grid(row=0, column=2, padx=10, pady=8, sticky="e")
+
+        # VIDEO SETTINGS
+        self.sect_video = ctk.CTkFrame(self)
+        self.sect_video.pack(pady=5, padx=15, fill="x")
         
-        self.cam_opt = ctk.CTkOptionMenu(self, values=[]) 
-        self.cam_opt.pack(pady=5)
+        # AQUI ESTÁ EL ARREGLO: Guardamos la etiqueta en self.lbl_vid_title
+        self.lbl_vid_title = ctk.CTkLabel(self.sect_video, text=TEXTOS[self.lang]["sect_video"], font=("Arial", 10, "bold"), text_color="gray")
+        self.lbl_vid_title.pack(pady=(5,0), anchor="w", padx=10)
+
+        self.cam_opt = ctk.CTkOptionMenu(self.sect_video, values=[], height=28)
+        self.cam_opt.pack(pady=5, padx=10, fill="x")
         
-        self.lbl_res = ctk.CTkLabel(self, text=TEXTOS[self.lang]["res"])
-        self.lbl_res.pack(pady=(15, 5))
-        self.res_opt = ctk.CTkSegmentedButton(self, values=["720p", "1080p"], command=self.ajustar_bitrate)
+        self.res_opt = ctk.CTkSegmentedButton(self.sect_video, values=["720p", "1080p"], height=28, command=self.preset_resolucion)
         self.res_opt.set("720p")
-        self.res_opt.pack(pady=5)
-        
-        self.lbl_bitrate_title = ctk.CTkLabel(self, text=TEXTOS[self.lang]["bitrate"])
-        self.lbl_bitrate_title.pack(pady=(15, 5))
-        self.lbl_bitrate_val = ctk.CTkLabel(self, text="8 Mbps")
-        self.lbl_bitrate_val.pack()
-        self.bit_slider = ctk.CTkSlider(self, from_=2, to=16, number_of_steps=14, command=lambda v: self.lbl_bitrate_val.configure(text=f"{int(v)} Mbps"))
-        self.bit_slider.set(8)
-        self.bit_slider.pack(pady=5)
+        self.res_opt.pack(pady=5, padx=10, fill="x")
 
-        # Opciones
-        self.opts_frame = ctk.CTkFrame(self)
-        self.opts_frame.pack(pady=20, padx=20, fill="x")
-        
-        self.mirror_sw = ctk.CTkSwitch(self.opts_frame, text=TEXTOS[self.lang]["mirror"], onvalue=True, offvalue=False)
-        self.mirror_sw.pack(pady=10)
-        
-        self.preview_sw = ctk.CTkSwitch(self.opts_frame, text=TEXTOS[self.lang]["preview"], onvalue=True, offvalue=False)
-        self.preview_sw.pack(pady=10)
+        self.lbl_bit_val = ctk.CTkLabel(self.sect_video, text="5 Mbps (Rec)", font=("Arial", 11))
+        self.lbl_bit_val.pack(pady=(5, 0))
+        self.bit_slider = ctk.CTkSlider(self.sect_video, from_=2, to=16, number_of_steps=14, height=16, command=self.actualizar_bitrate_texto)
+        self.bit_slider.set(5)
+        self.bit_slider.pack(pady=(0, 10), padx=10, fill="x")
 
-        # Botón
-        self.btn = ctk.CTkButton(self, text=TEXTOS[self.lang]["start"], fg_color="#2ecc71", font=("Roboto", 14, "bold"), height=45, command=self.toggle_camara)
-        self.btn.pack(pady=30, padx=20, fill="x")
+        # OPCIONES
+        self.sect_opts = ctk.CTkFrame(self)
+        self.sect_opts.pack(pady=5, padx=15, fill="x")
         
-        self.status = ctk.CTkLabel(self, text=TEXTOS[self.lang]["ready"], text_color="gray")
-        self.status.pack(side="bottom", pady=10)
-        
-        self.actualizar_textos_camaras()
+        # AQUI TAMBIÉN: Guardamos la etiqueta en self.lbl_opts_title
+        self.lbl_opts_title = ctk.CTkLabel(self.sect_opts, text=TEXTOS[self.lang]["sect_opts"], font=("Arial", 10, "bold"), text_color="gray")
+        self.lbl_opts_title.pack(pady=(5,0), anchor="w", padx=10)
 
-    def actualizar_textos_camaras(self):
-        opciones = []
+        self.audio_sw = ctk.CTkSwitch(self.sect_opts, text=TEXTOS[self.lang]["audio"], font=("Arial", 12))
+        self.audio_sw.pack(pady=5, padx=10, anchor="w")
+        self.mirror_sw = ctk.CTkSwitch(self.sect_opts, text=TEXTOS[self.lang]["mirror"], font=("Arial", 12))
+        self.mirror_sw.pack(pady=5, padx=10, anchor="w")
+        self.preview_sw = ctk.CTkSwitch(self.sect_opts, text=TEXTOS[self.lang]["preview"], font=("Arial", 12))
+        self.preview_sw.select(); self.preview_sw.pack(pady=(5, 10), padx=10, anchor="w")
+
+        # FOOTER
+        self.btn = ctk.CTkButton(self, text=TEXTOS[self.lang]["start"], fg_color="#2ecc71", height=38, font=("Roboto", 13, "bold"), command=self.toggle)
+        self.btn.pack(pady=15, padx=15, fill="x")
+        self.status = ctk.CTkLabel(self, text=TEXTOS[self.lang]["ready"], text_color="gray", font=("Arial", 10))
+        self.status.pack(side="bottom", pady=5)
+        
+        self.actualizar_tipo_conexion()
+        self.actualizar_textos()
+
+    def actualizar_bitrate_texto(self, val):
+        self.lbl_bit_val.configure(text=f"{int(val)} Mbps")
+
+    def preset_resolucion(self, res):
+        if res == "720p":
+            self.bit_slider.set(5)
+            self.lbl_bit_val.configure(text="5 Mbps (Rec)")
+        else:
+            self.bit_slider.set(8)
+            self.lbl_bit_val.configure(text="8 Mbps (Rec)")
+
+    def actualizar_tipo_conexion(self):
         t = TEXTOS[self.lang]
-        for cid in self.raw_camera_ids:
-            label = f"ID {cid} "
-            if cid == "0": label += f"({t['cam_rear']})"
-            elif cid == "1": label += f"({t['cam_front']})"
-            else: label += f"({t['cam_aux']})"
-            opciones.append(label)
-        self.cam_opt.configure(values=opciones)
-        if opciones: self.cam_opt.set(opciones[0])
+        if not self.target_serial:
+            self.lbl_conn_type.configure(text="---", text_color="gray")
+            self.status_card.configure(fg_color="#1f1f1f")
+            return
+        if "." in self.target_serial:
+            self.lbl_conn_type.configure(text=t["mode_wifi"], text_color="#ffffff")
+            self.status_card.configure(fg_color="#d35400")
+        else:
+            self.lbl_conn_type.configure(text=t["mode_usb"], text_color="#ffffff")
+            self.status_card.configure(fg_color="#2980b9")
 
-    def cambiar_idioma(self, value):
-        self.lang = "es" if "ES" in value else "en"
+    def actualizar_textos(self):
         t = TEXTOS[self.lang]
         self.lbl_title.configure(text=t["title"])
         self.btn_wifi.configure(text=t["wifi_btn"])
-        self.lbl_lens.configure(text=t["lens"])
-        self.lbl_res.configure(text=t["res"])
-        self.lbl_bitrate_title.configure(text=t["bitrate"])
-        self.mirror_sw.configure(text=t["mirror"])
-        self.preview_sw.configure(text=t["preview"])
-        self.actualizar_textos_camaras()
-        if self.process:
-            self.btn.configure(text=t["stop"])
-            self.status.configure(text=t["live"])
-        else:
-            self.btn.configure(text=t["start"])
-            self.status.configure(text=t["ready"])
+        
+        # ACTUALIZAMOS LOS TÍTULOS DE SECCIÓN
+        self.lbl_vid_title.configure(text=t["sect_video"])
+        self.lbl_opts_title.configure(text=t["sect_opts"])
 
-    def ajustar_bitrate(self, value):
-        if value == "1080p":
-            self.bit_slider.set(5)
-            self.lbl_bitrate_val.configure(text="5 Mbps (Rec)")
-        else:
-            self.bit_slider.set(8)
-            self.lbl_bitrate_val.configure(text="8 Mbps")
+        self.audio_sw.configure(text=t["audio"]); self.mirror_sw.configure(text=t["mirror"])
+        self.preview_sw.configure(text=t["preview"])
+        self.btn.configure(text=t["start"] if not self.process else t["stop"])
+        
+        vals = []
+        for cid in self.raw_camera_ids:
+            name = f"ID {cid}: "
+            if cid == "0": name += t["cam_rear"]
+            elif cid == "1": name += t["cam_front"]
+            else: name += t["cam_aux"]
+            vals.append(name)
+        
+        if not vals: vals = [t["no_cams"]]
+        
+        self.cam_opt.configure(values=vals)
+        current = self.cam_opt.get()
+        if current == "CTkOptionMenu" or current not in vals:
+             self.cam_opt.set(vals[0])
+        
+        self.actualizar_tipo_conexion()
+
+    def cambiar_idioma(self, v):
+        self.lang = "es" if v == "ES" else "en"
+        self.actualizar_textos()
 
     def activar_wifi(self):
         self.status.configure(text=TEXTOS[self.lang]["connecting"], text_color="yellow")
         def tarea():
             ok, msg = conectar_inalambrico()
             if ok:
-                self.lbl_model.configure(text=f"📡 WiFi: {msg}")
-                self.btn_wifi.configure(state="disabled", text="OK")
-                self.status.configure(text=TEXTOS[self.lang]["wifi_success"], text_color="green")
-            else:
-                self.status.configure(text=f"{TEXTOS[self.lang]['wifi_fail']} {msg}", text_color="red")
+                self.target_serial = msg
+                self.actualizar_tipo_conexion()
+            self.status.configure(text=f"Info: {msg}", text_color="green" if ok else "red")
         threading.Thread(target=tarea, daemon=True).start()
 
-    def toggle_camara(self):
-        t = TEXTOS[self.lang]
-        if self.btn.cget("text") in [TEXTOS["es"]["start"], TEXTOS["en"]["start"]]:
-            # REFRESCAMOS EL DISPOSITIVO OBJETIVO AL INICIAR
-            # Esto es vital: si desconectaste el USB justo antes de iniciar, 
-            # ahora detectará el WiFi automáticamente.
-            self.target_serial = obtener_serial_prioritario()
-            
+    def toggle(self):
+        if not self.process:
+            nuevo = obtener_serial_prioritario()
+            if nuevo and not ('.' in nuevo):
+                if self.target_serial != nuevo:
+                    subprocess.run("adb disconnect", shell=True)
+                    self.target_serial = nuevo
+                    self.actualizar_tipo_conexion()
+
             if not self.target_serial:
-                self.status.configure(text="Error: No se detectó dispositivo", text_color="red")
+                self.status.configure(text="Error: No Device", text_color="red")
                 return
-
-            self.thread = threading.Thread(target=self.lanzar_worker, daemon=True)
-            self.thread.start()
-            self.btn.configure(text=t["stop"], fg_color="#e74c3c")
-            self.status.configure(text=t["live"], text_color="#e74c3c")
+            
+            os.system("pkill -9 scrcpy 2>/dev/null")
+            threading.Thread(target=self.run_scrcpy, daemon=True).start()
         else:
-            self.detener()
+            if self.process: self.process.terminate()
+            os.system("pkill -9 scrcpy 2>/dev/null")
 
-    def lanzar_worker(self):
-        try: cam_id = re.search(r'ID (\d+)', self.cam_opt.get()).group(1)
-        except: cam_id = "0"
+    def run_scrcpy(self):
+        try: cid = re.search(r'ID (\d+)', self.cam_opt.get()).group(1)
+        except: cid = "0"
         
-        res = "1920x1080" if self.res_opt.get() == "1080p" else "1280x720"
-        bit = int(self.bit_slider.get())
+        setup_v4l2(10)
         
-        if setup_v4l2(10):
-            cmd = [SCRCPY_EXE]
-            
-            # --- AGREGADO: SELECCIÓN DE SERIAL ---
-            if self.target_serial:
-                cmd.extend(["-s", self.target_serial])
-            # -------------------------------------
+        cmd = [SCRCPY_EXE]
+        if self.target_serial: cmd.extend(["-s", self.target_serial])
+        
+        cmd.extend([
+            "--video-source=camera", f"--camera-id={cid}", 
+            f"--camera-size={'1920x1080' if self.res_opt.get() == '1080p' else '1280x720'}", 
+            f"--video-bit-rate={int(self.bit_slider.get())}M", 
+            "--v4l2-sink=/dev/video10", "--video-buffer=0"
+        ])
+        
+        if not self.audio_sw.get(): cmd.append("--no-audio")
+        else: cmd.extend(["--audio-bit-rate=64K"])
 
-            cmd.extend([
-                "--video-source=camera", 
-                f"--camera-id={cam_id}", f"--camera-size={res}", 
-                f"--video-encoder={self.encoder}", f"--video-bit-rate={bit}M", 
-                "--v4l2-sink=/dev/video10", "--no-audio", 
-                "--video-buffer=0"
-            ])
-            
-            if self.mirror_sw.get(): cmd.append("--orientation=flip0")
-            if not self.preview_sw.get(): cmd.append("--no-video-playback")
-            
-            try:
-                self.process = subprocess.Popen(cmd)
-                self.process.wait()
-            except Exception as e: print(f"Error: {e}")
-            finally:
-                t = TEXTOS[self.lang]
-                self.btn.configure(text=t["start"], fg_color="#2ecc71")
-                self.status.configure(text=t["finished"], text_color="gray")
-
-    def detener(self):
-        if self.process:
-            self.process.terminate()
-            self.process = None
-        os.system("sudo modprobe -r v4l2loopback 2>/dev/null")
+        if self.mirror_sw.get(): cmd.append("--orientation=flip0")
+        if not self.preview_sw.get(): cmd.append("--no-video-playback")
+        
+        self.btn.configure(text=TEXTOS[self.lang]["stop"], fg_color="#e74c3c")
+        self.status.configure(text=TEXTOS[self.lang]["live"], text_color="#e74c3c")
+        
+        self.process = subprocess.Popen(cmd)
+        self.process.wait()
+        
+        self.btn.configure(text=TEXTOS[self.lang]["start"], fg_color="#2ecc71")
+        self.status.configure(text=TEXTOS[self.lang]["finished"], text_color="gray")
+        self.process = None
 
 if __name__ == "__main__":
-    print(f"{Fore.MAGENTA}=== Scrcpy Webcam Ultimate ===")
-    if instalador_automatico() and check_dependencies():
-        app = WebcamApp()
-        app.mainloop()
-    else:
-        print(f"{Fore.RED}Error al iniciar.")
+    if instalador_automatico():
+        crear_lanzador_linux()
+        WebcamApp().mainloop()

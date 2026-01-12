@@ -12,10 +12,8 @@ scrcpy_download.tar.gz
 *.log
 .DS_Store
 
-# Otras cosas
-main (copia anda bien).py
-main (copia con visor).py
 
 # Archivos temporales de Xed/Editores
 *~
 *.swp
+*.desktop
