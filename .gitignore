@@ -11,7 +11,7 @@ scrcpy_download.tar.gz
 # Logs y configuraciones del sistema
 *.log
 .DS_Store
-
+config.json
 
 # Archivos temporales de Xed/Editores
 *~
